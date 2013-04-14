@@ -1,0 +1,114 @@
+<% @require_extras.each do |line| -%>
+require <%= line %>
+<% end -%>
+
+# Configuration snippet for <%= @name %>
+#
+# This file is handled by puppet, all local modifications will be lost
+
+# Based on http://unicorn.bogomips.org/examples/unicorn.conf.rb
+# See http://unicorn.bogomips.org/Unicorn/Configurator.html for complete
+# documentation.
+
+# Use at least one worker per core if you're on a dedicated server,
+# more will usually help for _short_ waits on databases/caches.
+worker_processes <%= @worker_processes %>
+
+# Help ensure your application will always spawn in the symlinked
+# "current" directory that Capistrano sets up.
+working_directory "<%= @approot + '/current' %>"
+
+<% if @socket_path then -%>
+# Unix domain socket
+listen "<%= @socket_path %>", :backlog => <%= @socket_backlog %>
+<% end -%>
+
+<% if @port then -%>
+# TCP port
+listen <%= @port %>, :tcp_nopush => <%= @tcp_nopush %>
+<% end -%>
+
+# nuke workers after timeout
+timeout <%= @timeout_secs %>
+
+# Save the pid somewhere
+pid "<%= @approot + '/pids/unicorn.pid' %>"
+
+# By default, the Unicorn logger will write to stderr.
+# Additionally, ome applications/frameworks log to stderr or stdout,
+# so prevent them from going to /dev/null when daemonized here:
+stderr_path "<%= @approot + '/log/unicorn.stderr.log' %>"
+stdout_path "<%= @approot + '/log/unicorn.stdout.log' %>"
+
+<% if @preload_app == true then -%>
+# combine REE with "preload_app true" for memory savings
+# http://rubyenterpriseedition.com/faq.html#adapt_apps_for_cow
+preload_app true
+GC.respond_to?(:copy_on_write_friendly=) and
+  GC.copy_on_write_friendly = true
+<% end -%>
+
+<% if @before_exec.any? -%>
+before_exec do |server|
+<% @before_exec.each do |line| -%>
+  <%= line %>
+<% end -%>
+end
+<% end -%>
+
+before_fork do |server, worker|
+<% if @preload_app == true and @rails == true then -%>
+  # there's no need for the master process to hold a connection
+  defined?(ActiveRecord::Base) and
+    ActiveRecord::Base.connection.disconnect!
+<% end -%>
+
+<% if @rolling_restarts == true -%>
+  # This allows a new master process to incrementally
+  # phase out the old master process with SIGTTOU to avoid a
+  # thundering herd (especially in the "preload_app false" case)
+  # when doing a transparent upgrade.  The last worker spawned
+  # will then kill off the old master process with a SIGQUIT.
+  old_pid = "#{server.config[:pid]}.oldbin"
+  if old_pid != server.pid
+    begin
+      sig = (worker.nr + 1) >= server.worker_processes ? :QUIT : :TTOU
+      Process.kill(sig, File.read(old_pid).to_i)
+    rescue Errno::ENOENT, Errno::ESRCH
+    end
+  end
+  #
+  # Throttle the master from forking too quickly by sleeping.  Due
+  # to the implementation of standard Unix signal handlers, this
+  # helps (but does not completely) prevent identical, repeated signals
+  # from being lost when the receiving process is busy.
+  sleep <%= rolling_restarts_sleep %>
+<% end -%>
+
+<% @before_fork_extras.each do |line| -%>
+  <%= line %>
+<% end -%>
+end
+
+after_fork do |server, worker|
+<% if @debug_base_port then -%>
+  # per-process listener ports for debugging/admin/migrations
+  addr = "127.0.0.1:#{<%= @debug_base_port %> + worker.nr}"
+  server.listen(addr, :tries => -1, :delay => 5, :tcp_nopush => true)
+<% end -%>
+
+<% if @preload_app == true and @rails == true then -%>
+  # the following is *required* for Rails + "preload_app true",
+  defined?(ActiveRecord::Base) and
+    ActiveRecord::Base.establish_connection
+<% end -%>
+
+<% @after_fork_extras.each do |line| -%>
+  <%= line %>
+<% end -%>
+end
+
+# Fix logging
+# http://unicorn.bogomips.org/FAQ.html
+Configurator::DEFAULTS[:logger].formatter = Logger::Formatter.new
+
