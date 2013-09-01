@@ -28,7 +28,7 @@ define unicorn::instance (
   $owner                    = 'root',
   $group                    = 'root',
   $service_autorestart      = true,
-  $noops                    = false,
+  $noops                    = undef,
   $ensure                   = 'present'
 ) {
 
