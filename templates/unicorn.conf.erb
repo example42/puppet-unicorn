@@ -16,7 +16,7 @@ worker_processes <%= @worker_processes %>
 
 # Help ensure your application will always spawn in the symlinked
 # "current" directory that Capistrano sets up.
-working_directory "<%= @approot + '/current' %>"
+working_directory "<%= @working_directory %>"
 
 <% if @socket_path then -%>
 # Unix domain socket
@@ -32,13 +32,13 @@ listen <%= @port %>, :tcp_nopush => <%= @tcp_nopush %>
 timeout <%= @timeout_secs %>
 
 # Save the pid somewhere
-pid "<%= @approot + '/pids/unicorn.pid' %>"
+pid "<%= @real_pid_path %>"
 
 # By default, the Unicorn logger will write to stderr.
 # Additionally, ome applications/frameworks log to stderr or stdout,
 # so prevent them from going to /dev/null when daemonized here:
-stderr_path "<%= @approot + '/log/unicorn.stderr.log' %>"
-stdout_path "<%= @approot + '/log/unicorn.stdout.log' %>"
+stderr_path "<%= @real_stderr_path %>"
+stdout_path "<%= @real_stdout_path %>"
 
 <% if @preload_app == true then -%>
 # combine REE with "preload_app true" for memory savings
@@ -82,7 +82,7 @@ before_fork do |server, worker|
   # to the implementation of standard Unix signal handlers, this
   # helps (but does not completely) prevent identical, repeated signals
   # from being lost when the receiving process is busy.
-  sleep <%= rolling_restarts_sleep %>
+  sleep <%= @rolling_restarts_sleep %>
 <% end -%>
 
 <% @before_fork_extras.each do |line| -%>
