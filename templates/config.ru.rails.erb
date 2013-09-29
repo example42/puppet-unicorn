@@ -1,0 +1,6 @@
+# File Managed by Puppet
+
+# Require your environment file to bootstrap Rails
+require ::File.expand_path('../config/environment',  __FILE__)
+
+run <%= @rails_app_name %>::Application
