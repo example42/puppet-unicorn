@@ -7,6 +7,7 @@ define unicorn::instance (
   $approot,
   $config_template          = 'unicorn/unicorn.conf.erb',
   $config_ru_template       = 'unicorn/config.ru.erb',
+  $config_ru_rails_template = 'unicorn/config.ru.rails.erb',
   $init_template            = 'unicorn/service.init.erb',
   $worker_processes         = '4',
   $socket_path              = false,
@@ -16,6 +17,7 @@ define unicorn::instance (
   $timeout_secs             = '60',
   $preload_app              = true,
   $rails                    = false,
+  $rails_app                = undef,
   $rolling_restarts         = true,
   $rolling_restarts_sleep   = '1',
   $debug_base_port          = false,
@@ -105,6 +107,15 @@ define unicorn::instance (
     default => $config_ru_path,
   }
 
+  $real_config_ru_template = $rails ? {
+    true    => $config_ru_rails_template,
+    false   => $config_ru_template,
+  }
+
+  if ($rails == true) and ($rails_app == undef) {
+    fail('unicorn: Must specify a rails_app for config.ru when using rails')
+  }
+
   file { "${name}_unicorn.conf":
     ensure  => $ensure,
     path    => $real_config_path,
@@ -123,7 +134,7 @@ define unicorn::instance (
     mode    => 644,
     owner   => $owner,
     group   => $group,
-    content => template($config_ru_template),
+    content => template($real_config_ru_template),
     notify  => $manage_service_autorestart,
     noop    => $noops,
   }
